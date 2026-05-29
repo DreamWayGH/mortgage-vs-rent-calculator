@@ -1,6 +1,7 @@
 {
   "name": "mortgage-vs-rent-calculator",
   "version": "0.1.0",
+  "homepage": "https://DreamWayGH.github.io/mortgage-vs-rent-calculator",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
