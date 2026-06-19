@@ -32,6 +32,7 @@ export function calculateMortgage(inputs) {
     loanYears,
     gracePeriodYears,
     housePriceGrowthRate,
+    qingAnPreset,
   } = inputs;
 
   const housePriceDollars = housePrice * 10000;
@@ -43,18 +44,50 @@ export function calculateMortgage(inputs) {
   const qingAnMonthlyRate = qingAnRate / 100 / 12;
   const excessMonthlyRate = excessRate / 100 / 12;
 
+  // 若有套用退場模擬且該 preset 提供 phasedSchedule，使用加權年利率近似
+  let effectiveQingAnRate = qingAnRate;
+  try {
+    // 若該 preset 提供 phasedSchedule，對預設方案（例如 2.0）自動套用退場模擬
+    if (qingAnPreset) {
+      // 讀取 presets 檔案（在 runtime 中從 module 載入）
+      // 為避免循環引用，此處 require 常數檔案
+      // eslint-disable-next-line global-require
+      const { QINGAN_PRESETS } = require('../constants/defaults');
+      const preset = QINGAN_PRESETS[qingAnPreset];
+      if (preset && preset.phasedSchedule && Array.isArray(preset.phasedSchedule)) {
+        let yearsLeft = loanYears;
+        let weightedSum = 0;
+        for (const seg of preset.phasedSchedule) {
+          const use = Math.min(yearsLeft, seg.years);
+          weightedSum += use * seg.rate;
+          yearsLeft -= use;
+          if (yearsLeft <= 0) break;
+        }
+        if (yearsLeft > 0) {
+          weightedSum += yearsLeft * (preset.qingAnRate ?? qingAnRate);
+        }
+        effectiveQingAnRate = weightedSum / loanYears;
+      }
+    }
+  } catch (e) {
+    // ignore and use given qingAnRate
+    // console.warn('qingAn phased simulation load failed', e);
+  }
+
+  const effectiveQingAnMonthlyRate = effectiveQingAnRate / 100 / 12;
+
   const totalMonths = loanYears * 12;
   const graceMonths = gracePeriodYears * 12;
   const amortMonths = totalMonths - graceMonths;
 
   // 寬限期月繳（只繳息）
   const gracePayment =
-    qingAnLoan * qingAnMonthlyRate + excessLoan * excessMonthlyRate;
+    qingAnLoan * effectiveQingAnMonthlyRate + excessLoan * excessMonthlyRate;
 
   // 攤還期月繳（本息均攤，兩筆貸款分別計算）
   const qingAnAmortPayment = calculateAmortizedPayment(
     qingAnLoan,
-    qingAnMonthlyRate,
+    effectiveQingAnMonthlyRate,
     amortMonths
   );
   const excessAmortPayment = calculateAmortizedPayment(

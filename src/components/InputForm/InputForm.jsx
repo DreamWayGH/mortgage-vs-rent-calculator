@@ -29,8 +29,14 @@ function InputForm({ onSubmit, onClearAll }) {
 
   const handleChange = (field) => (e) => {
     const raw = e.target.value;
-    // 允許空字串以便編輯，計算時再轉成數字
-    setValues((prev) => ({ ...prev, [field]: raw === '' ? '' : Number(raw) }));
+    // 允許空字串以便編輯；若值為數字字串則轉成 Number，否則保留原始字串（例如選單 preset）
+    setValues((prev) => {
+      if (raw === '') return { ...prev, [field]: '' };
+      // 對 preset 類欄位保留字串
+      if (field === 'qingAnPreset') return { ...prev, [field]: String(raw) };
+      const n = Number(raw);
+      return { ...prev, [field]: Number.isNaN(n) ? raw : n };
+    });
   };
 
   const validate = () => {
@@ -39,6 +45,8 @@ function InputForm({ onSubmit, onClearAll }) {
     if (v.gracePeriodYears > v.loanYears) return '寬限期不能大於貸款年限';
     const fields = Object.entries(v);
     for (const [k, val] of fields) {
+      // 跳過非數值欄位
+      if (k === 'qingAnPreset') continue;
       if (val === '' || isNaN(val)) return `欄位「${k}」需為數字`;
       if (val < 0) return `欄位「${k}」不能為負`;
     }
